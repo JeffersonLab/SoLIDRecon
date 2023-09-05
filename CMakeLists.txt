@@ -26,7 +26,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(EICRecon)
+project(SoLIDrecon)
 
 # CMake includes
 include(CheckCXXCompilerFlag)
@@ -44,9 +44,9 @@ endif()
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # This PROJECT_SOURCE_DIR at this point corresponds to repository root.
-# Saving it as EICRECON_SOURCE_DIR so can be used for jana_plugin.cmake
+# Saving it as SOLIDRECON_SOURCE_DIR so can be used for jana_plugin.cmake
 # to correctly set plugin includes (and in other places as needed)
-set(EICRECON_SOURCE_DIR ${PROJECT_SOURCE_DIR})
+set(SOLIDRECON_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 
 # Also use clang-tidy integration in CMake
 option(ENABLE_CLANG_TIDY "Enable clang-tidy integration in cmake" OFF)
@@ -70,7 +70,7 @@ endif()
 
 # Default plugins installation directory is 'plugins'
 if(NOT DEFINED PLUGIN_OUTPUT_DIRECTORY)
-    set(PLUGIN_OUTPUT_DIRECTORY "lib/EICrecon/plugins")
+    set(PLUGIN_OUTPUT_DIRECTORY "lib/SoLIDrecon/plugins")
     message(STATUS "${CMAKE_PROJECT_NAME}: Set default PLUGIN_OUTPUT_DIRECTORY")
 endif()
 message(STATUS "${CMAKE_PROJECT_NAME}: PLUGIN_OUTPUT_DIRECTORY: ${PLUGIN_OUTPUT_DIRECTORY}")
@@ -114,13 +114,13 @@ endif()
 find_package(ROOT REQUIRED)
 
 # Set it ON for additional CMake printout
-set(EICRECON_VERBOSE_CMAKE OFF)
+set(SOLIDRECON_VERBOSE_CMAKE OFF)
 
 
 # Add CMake additional functionality:
 include(cmake/print_functions.cmake)                        # Helpers to print fancy headers, file names, etc
-include(cmake/jana_plugin.cmake)                            # Add common settings for plugins
-list (APPEND CMAKE_MODULE_PATH ${EICRECON_SOURCE_DIR}/cmake)   # Find Find<Modules>.cmake
+include(cmake/jana_plugin_solid.cmake)                            # Add common settings for plugins
+list (APPEND CMAKE_MODULE_PATH ${SOLIDRECON_SOURCE_DIR}/cmake)   # Find Find<Modules>.cmake
 
 enable_testing()
 
@@ -169,7 +169,7 @@ add_subdirectory( src/utilities )
 
 # Install all cmake helpers
 include(CMakePackageConfigHelpers)
-configure_package_config_file(cmake/EICreconConfig.cmake.in cmake/EICreconConfig.cmake INSTALL_DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/EICrecon)
-install(FILES ${CMAKE_BINARY_DIR}/cmake/EICreconConfig.cmake DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/EICrecon)  # why is this needed?
-file(GLOB EICRECON_CMAKE_FILES cmake/*.cmake)
-install(FILES ${EICRECON_CMAKE_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/EICrecon)
+configure_package_config_file(cmake/SoLIDreconConfig.cmake.in cmake/SoLIDreconConfig.cmake INSTALL_DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/SoLIDrecon)
+install(FILES ${CMAKE_BINARY_DIR}/cmake/SoLIDreconConfig.cmake DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/SoLIDrecon)  # why is this needed?
+file(GLOB SOLIDRECON_CMAKE_FILES cmake/*.cmake)
+install(FILES ${SOLIDRECON_CMAKE_FILES} DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/cmake/SoLIDrecon)
