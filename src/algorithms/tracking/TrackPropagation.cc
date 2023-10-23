@@ -14,6 +14,7 @@
 #include <Acts/EventData/MultiTrajectoryHelpers.hpp>
 
 // Event Model related classes
+#include <edm4eic/EDM4eicVersion.h>
 #include <edm4eic/TrackerHitCollection.h>
 #include <edm4eic/TrackParametersCollection.h>
 #include <edm4eic/TrajectoryCollection.h>
@@ -30,6 +31,8 @@
 
 
 #include "ActsGeometryProvider.h"
+
+#include "extensions/spdlog/SpdlogToActs.h"
 
 #include <edm4eic/vector_utils.h>
 
@@ -181,7 +184,7 @@ namespace eicrecon {
             m_log->trace("  Empty multiTrajectory.");
             return nullptr;
         }
-        auto &trackTip = trackTips.front();
+        const auto &trackTip = trackTips.front();
 
         // Collect the trajectory summary info
         auto trajState = Acts::MultiTrajectoryHelpers::trajectoryState(mj, trackTip);
@@ -208,10 +211,8 @@ namespace eicrecon {
         using Propagator = Acts::Propagator<Stepper>;
         Stepper stepper(magneticField);
         Propagator propagator(stepper);
-        // Acts::Logging::Level logLevel = Acts::Logging::FATAL
-        Acts::Logging::Level logLevel = Acts::Logging::INFO;
 
-        ACTS_LOCAL_LOGGER(Acts::getDefaultLogger("ProjectTrack Logger", logLevel));
+        ACTS_LOCAL_LOGGER(eicrecon::getSpdlogLogger(m_log));
 
         Acts::PropagatorOptions<> options(m_geoContext, m_fieldContext, Acts::LoggerWrapper{logger()});
 
@@ -290,6 +291,10 @@ namespace eicrecon {
         m_log->trace("    loc err = {:.4f}", static_cast<float>(covariance(Acts::eBoundLoc1, Acts::eBoundLoc1)));
         m_log->trace("    loc err = {:.4f}", static_cast<float>(covariance(Acts::eBoundLoc0, Acts::eBoundLoc1)));
 
+#if EDM4EIC_VERSION_MAJOR >= 3
+        uint64_t surface = targetSurf->geometryId().value();
+        uint32_t system = 0; // default value...will be set in TrackPropagation factory
+#endif
 
         /*
          ::edm4hep::Vector3f position{}; ///< Position of the trajectory point [mm]
@@ -305,6 +310,10 @@ namespace eicrecon {
           float pathlengthError{}; ///< Error on the pathlenght
          */
         return std::make_unique<edm4eic::TrackPoint>(edm4eic::TrackPoint{
+#if EDM4EIC_VERSION_MAJOR >= 3
+                                               surface,
+                                               system,
+#endif
                                                position,
                                                positionError,
                                                momentum,

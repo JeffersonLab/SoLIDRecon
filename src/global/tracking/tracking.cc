@@ -3,10 +3,7 @@
 //
 //
 
-#include <Acts/Propagator/Navigator.hpp>
-
 #include <JANA/JApplication.h>
-#include <JANA/JEvent.h>
 
 #include "extensions/jana/JChainFactoryGeneratorT.h"
 #include "extensions/jana/JChainMultifactoryGeneratorT.h"
@@ -18,6 +15,7 @@
 #include "CKFTracking_factory.h"
 #include "TrackSeeding_factory.h"
 #include "TrackProjector_factory.h"
+#include "TrackPropagation_factory.h"
 #include "IterativeVertexFinder_factory.h"
 
 //
@@ -89,6 +87,13 @@ void InitPlugin(JApplication *app) {
 
     app->Add(new JChainFactoryGeneratorT<IterativeVertexFinder_factory>(
             {"CentralCKFActsTrajectories"}, "CentralTrackVertices"));
+
+    app->Add(new JChainMultifactoryGeneratorT<TrackPropagation_factory>(
+            "CalorimeterTrackPropagator",
+            {"CentralCKFActsTrajectories"},
+            {"CalorimeterTrackProjections"},
+            app
+            ));
 
 }
 } // extern "C"

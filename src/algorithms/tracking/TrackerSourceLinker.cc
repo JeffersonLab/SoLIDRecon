@@ -24,13 +24,14 @@
 #include <utility>
 
 
-void eicrecon::TrackerSourceLinker::init(std::shared_ptr<const dd4hep::rec::CellIDPositionConverter> cellid_converter,
+void eicrecon::TrackerSourceLinker::init(const dd4hep::Detector* detector,
+                                         const dd4hep::rec::CellIDPositionConverter* converter,
                                          std::shared_ptr<const ActsGeometryProvider> acts_context,
                                          std::shared_ptr<spdlog::logger> logger) {
-    m_cellid_converter = std::move(cellid_converter);
+    m_dd4hepGeo = detector;
+    m_converter = converter;
     m_log = std::move(logger);
     m_acts_context = std::move(acts_context);
-    m_dd4hepGeo = m_acts_context->dd4hepDetector();
     m_detid_b0tracker = m_dd4hepGeo->constant<int>("B0Tracker_Station_1_ID");
 }
 
@@ -50,14 +51,14 @@ eicrecon::TrackerSourceLinkerResult *eicrecon::TrackerSourceLinker::produce(std:
     m_log->debug("Hits size: {}  measurements->size: {}", trk_hits.size(), measurements->size());
 
     int hit_index = 0;
-    for (auto hit: trk_hits) {
+    for (const auto *hit: trk_hits) {
 
         Acts::SymMatrix2 cov = Acts::SymMatrix2::Zero();
         cov(0, 0) = hit->getPositionError().xx * mm_acts * mm_acts; // note mm = 1 (Acts)
         cov(1, 1) = hit->getPositionError().yy * mm_acts * mm_acts;
 
 
-        const auto* vol_ctx = m_cellid_converter->findContext(hit->getCellID());
+        const auto* vol_ctx = m_converter->findContext(hit->getCellID());
         auto vol_id = vol_ctx->identifier;
 
 
@@ -78,7 +79,7 @@ eicrecon::TrackerSourceLinkerResult *eicrecon::TrackerSourceLinker::produce(std:
         // variable surf_center not used anywhere;
         // auto surf_center = surface->center(Acts::GeometryContext());
 
-        auto& hit_pos = hit->getPosition();
+        const auto& hit_pos = hit->getPosition();
 
         Acts::Vector2 loc = Acts::Vector2::Zero();
         Acts::Vector2 pos;
@@ -131,7 +132,7 @@ eicrecon::TrackerSourceLinkerResult *eicrecon::TrackerSourceLinker::produce(std:
     }
     m_log->debug("All hits processed measurements->size(): {}", measurements->size());
 
-    auto result = new eicrecon::TrackerSourceLinkerResult();
+    auto *result = new eicrecon::TrackerSourceLinkerResult();
 
     result->sourceLinks = sourceLinks;
     result->measurements = measurements;

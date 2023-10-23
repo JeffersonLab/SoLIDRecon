@@ -2,7 +2,6 @@
 // Copyright (C) 2022 Whitney Armstrong, Wouter Deconinck, Dmitry Romanov
 
 #include <fmt/ostream.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
 
 #include "ActsGeometryProvider.h"
 
@@ -15,13 +14,27 @@
 #include <Acts/Geometry/TrackingGeometry.hpp>
 #include <Acts/Plugins/DD4hep/ConvertDD4hepDetector.hpp>
 #include <Acts/MagneticField/MagneticFieldContext.hpp>
+#include <Acts/Material/IMaterialDecorator.hpp>
 #include <Acts/Surfaces/PlaneSurface.hpp>
+#include <Acts/Plugins/DD4hep/DD4hepDetectorElement.hpp>
 #include <Acts/Plugins/Json/JsonMaterialDecorator.hpp>
 #include <Acts/Plugins/Json/MaterialMapJsonConverter.hpp>
 
-
 #include "extensions/spdlog/SpdlogToActs.h"
 #include "extensions/spdlog/SpdlogFormatters.h"
+
+// Formatter for Eigen matrices
+#if FMT_VERSION >= 90000
+#include <Eigen/Core>
+template <typename T>
+struct fmt::formatter<
+    T,
+    std::enable_if_t<
+        std::is_base_of_v<Eigen::MatrixBase<T>, T>,
+        char
+    >
+> : fmt::ostream_formatter {};
+#endif // FMT_VERSION >= 90000
 
 void draw_surfaces(std::shared_ptr<const Acts::TrackingGeometry> trk_geo, const Acts::GeometryContext geo_ctx,
                    const std::string &fname) {
@@ -59,7 +72,7 @@ void draw_surfaces(std::shared_ptr<const Acts::TrackingGeometry> trk_geo, const 
 }
 
 
-void ActsGeometryProvider::initialize(dd4hep::Detector *dd4hep_geo,
+void ActsGeometryProvider::initialize(const dd4hep::Detector* dd4hep_geo,
                                       std::string material_file,
                                       std::shared_ptr<spdlog::logger> log,
                                       std::shared_ptr<spdlog::logger> init_log) {
@@ -77,9 +90,6 @@ void ActsGeometryProvider::initialize(dd4hep::Detector *dd4hep_geo,
 
     // Set ACTS logging level
     auto acts_init_log_level = eicrecon::SpdlogToActsLevel(m_init_log->level());
-
-    // Surfaces conversion log level
-    uint printoutLevel = (uint) m_init_log->level();
 
     m_dd4hepDetector = dd4hep_geo;
 
@@ -103,16 +113,28 @@ void ActsGeometryProvider::initialize(dd4hep::Detector *dd4hep_geo,
 //  }
 
     // Load ACTS materials maps
+    std::shared_ptr<const Acts::IMaterialDecorator> materialDeco{nullptr};
     if (!material_file.empty()) {
         m_init_log->info("loading materials map from file: '{}'", material_file);
         // Set up the converter first
         Acts::MaterialMapJsonConverter::Config jsonGeoConvConfig;
         // Set up the json-based decorator
-        m_materialDeco = std::make_shared<const Acts::JsonMaterialDecorator>(jsonGeoConvConfig, material_file,acts_init_log_level);
+        materialDeco = std::make_shared<const Acts::JsonMaterialDecorator>(jsonGeoConvConfig, material_file,acts_init_log_level);
     } else {
         m_init_log->warn("no ACTS materials map has been loaded");
-        m_materialDeco = std::make_shared<const Acts::MaterialWiper>();
+        materialDeco = std::make_shared<const Acts::MaterialWiper>();
     }
+
+    // Geometry identifier hook to write detector ID to extra field
+    Acts::GeometryIdentifierHook geometryIdHook = [](Acts::GeometryIdentifier identifier, const Acts::Surface& surface) {
+        const auto* dd4hep_det_element =
+            dynamic_cast<const Acts::DD4hepDetectorElement*>(surface.associatedDetectorElement());
+        if (dd4hep_det_element == nullptr) {
+            return identifier;
+        }
+        // set 8-bit extra field to 8-bit DD4hep detector ID
+        return identifier.setExtra(0xff & dd4hep_det_element->identifier());
+    };
 
     // Convert DD4hep geometry to ACTS
     m_init_log->info("Converting DD4Hep geometry to ACTS...");
@@ -136,7 +158,8 @@ void ActsGeometryProvider::initialize(dd4hep::Detector *dd4hep_geo,
                 defaultLayerThickness,
                 sortDetElementsByID,
                 m_trackingGeoCtx,
-                m_materialDeco);
+                materialDeco,
+                geometryIdHook);
     }
     catch(std::exception &ex) {
         m_init_log->error("Error during DD4Hep -> ACTS geometry conversion. See error reason below...");

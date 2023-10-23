@@ -2,8 +2,11 @@
 // Copyright (C) 2023, Dmitry Kalinkin
 
 #include <catch2/catch_test_macros.hpp>
+#include <edm4hep/CaloHitContributionCollection.h>
 #include <edm4hep/MutableSimCalorimeterHit.h>
 #include <spdlog/logger.h>
+
+#include <DD4hep/Detector.h>
 
 #include "algorithms/calorimetry/CalorimeterHitDigi.h"
 
@@ -15,6 +18,8 @@ TEST_CASE( "the clustering algorithm runs", "[CalorimeterHitDigi]" ) {
 
   std::shared_ptr<spdlog::logger> logger = spdlog::default_logger()->clone("CalorimeterHitDigi");
   logger->set_level(spdlog::level::trace);
+
+  auto detector = dd4hep::Detector::make_unique("");
 
   CalorimeterHitDigiConfig cfg;
   cfg.threshold = 0. /* GeV */;
@@ -31,26 +36,27 @@ TEST_CASE( "the clustering algorithm runs", "[CalorimeterHitDigi]" ) {
     cfg.pedMeanADC = 123;
     cfg.resolutionTDC = 1.0 * dd4hep::ns;
     algo.applyConfig(cfg);
-    algo.init(nullptr, logger);
+    algo.init(detector.get(), logger);
 
+    edm4hep::CaloHitContributionCollection calohits;
     edm4hep::SimCalorimeterHitCollection simhits;
     auto mhit = simhits.create(
       0xABABABAB, // std::uint64_t cellID
       1.0 /* GeV */, // float energy
       edm4hep::Vector3f({0. /* mm */, 0. /* mm */, 0. /* mm */}) // edm4hep::Vector3f position
     );
-    mhit.addToContributions({
+    mhit.addToContributions(calohits->create(
       0, // std::int32_t PDG
       0.5 /* GeV */, // float energy
       7.0 /* ns */, // float time
-      {0. /* mm */, 0. /* mm */, 0. /* mm */}, // edm4hep::Vector3f stepPosition
-    });
-    mhit.addToContributions({
+      edm4hep::Vector3f({0. /* mm */, 0. /* mm */, 0. /* mm */}) // edm4hep::Vector3f stepPosition
+    ));
+    mhit.addToContributions(calohits->create(
       0, // std::int32_t PDG
       0.5 /* GeV */, // float energy
       9.0 /* ns */, // float time
-      {0. /* mm */, 0. /* mm */, 0. /* mm */}, // edm4hep::Vector3f stepPosition
-    });
+      edm4hep::Vector3f({0. /* mm */, 0. /* mm */, 0. /* mm */}) // edm4hep::Vector3f stepPosition
+    ));
 
     std::unique_ptr<edm4hep::RawCalorimeterHitCollection> rawhits = algo.process(simhits);
 

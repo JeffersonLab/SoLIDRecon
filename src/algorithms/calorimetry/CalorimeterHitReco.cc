@@ -7,7 +7,6 @@
 
 #include "CalorimeterHitReco.h"
 
-#include <JANA/JEvent.h>
 #include <Evaluator/DD4hepUnits.h>
 #include <fmt/format.h>
 #include <cctype>
@@ -16,9 +15,9 @@ using namespace dd4hep;
 
 namespace eicrecon {
 
-void CalorimeterHitReco::init(const dd4hep::Detector* detector, std::shared_ptr<spdlog::logger>& logger) {
+void CalorimeterHitReco::init(const dd4hep::Detector* detector, const dd4hep::rec::CellIDPositionConverter* converter, std::shared_ptr<spdlog::logger>& logger) {
     m_detector = detector;
-    m_converter = std::make_shared<const dd4hep::rec::CellIDPositionConverter>(const_cast<dd4hep::Detector&>(*detector));
+    m_converter = converter;
     m_log = logger;
 
     // threshold for firing
@@ -32,25 +31,23 @@ void CalorimeterHitReco::init(const dd4hep::Detector* detector, std::shared_ptr<
     }
 
     // First, try and get the IDDescriptor. This will throw an exception if it fails.
+    IDDescriptor id_spec;
     try {
-        auto id_spec = m_detector->readout(m_cfg.readout).idSpec();
+        id_spec = m_detector->readout(m_cfg.readout).idSpec();
     } catch(...) {
         m_log->warn("Failed to get idSpec for {}", m_cfg.readout);
         return;
     }
-
-    // Get id_spec again, but here it should always succeed.
-    // TODO: This is a bit of a hack so should be cleaned up.
-    auto id_spec = m_detector->readout(m_cfg.readout).idSpec();
+    // Next, try and get the readout fields. This will throw a different exception.
     try {
         id_dec = id_spec.decoder();
         if (!m_cfg.sectorField.empty()) {
             sector_idx = id_dec->index(m_cfg.sectorField);
-            m_log->info("Find sector field {}, index = {}", m_cfg.sectorField, sector_idx);
+            m_log->debug("Find sector field {}, index = {}", m_cfg.sectorField, sector_idx);
         }
         if (!m_cfg.layerField.empty()) {
             layer_idx = id_dec->index(m_cfg.layerField);
-            m_log->info("Find layer field {}, index = {}", m_cfg.layerField, sector_idx);
+            m_log->debug("Find layer field {}, index = {}", m_cfg.layerField, sector_idx);
         }
         if (!m_cfg.maskPosFields.empty()) {
             size_t tmp_mask = 0;
@@ -102,7 +99,7 @@ void CalorimeterHitReco::init(const dd4hep::Detector* detector, std::shared_ptr<
         local_mask = id_spec.get_mask(fields);
         // use all fields if nothing provided
         if (fields.empty()) {
-            local_mask = ~0;
+            local_mask = ~static_cast<decltype(local_mask)>(0);
         }
     }
 
@@ -121,7 +118,6 @@ std::unique_ptr<edm4eic::CalorimeterHitCollection> CalorimeterHitReco::process(c
     // number is encountered disable this algorithm. A useful message
     // indicating what is going on is printed below where the
     // error is detector.
-    auto decoder = m_detector->readout(m_cfg.readout).idSpec().decoder();
     if (NcellIDerrors >= MaxCellIDerrors) return std::move(recohits);
 
     for (const auto &rh: rawhits) {
@@ -132,21 +128,28 @@ std::unique_ptr<edm4eic::CalorimeterHitCollection> CalorimeterHitReco::process(c
             continue;
         }
 
-        // convert ADC to energy
-        float energy = (((signed) rh.getAmplitude() - (signed) m_cfg.pedMeanADC)) / static_cast<float>(m_cfg.capADC) * m_cfg.dyRangeADC /
-                m_cfg.sampFrac;
-        if (m_cfg.readout == "LFHCALHits" && m_cfg.sampFracLayer[0] != 0.){
-          energy = (((signed) rh.getAmplitude() - (signed) m_cfg.pedMeanADC)) / static_cast<float>(m_cfg.capADC) * m_cfg.dyRangeADC /
-                    m_cfg.sampFracLayer[decoder->get(cellID, decoder->index("rlayerz"))]; // use readout layer depth information from decoder
-        }
-
-        const float time = rh.getTimeStamp() / stepTDC;
-        m_log->trace("cellID {}, \t energy: {},  TDC: {}, time: ", cellID, energy, rh.getTimeStamp(), time);
-
+        // get layer and sector ID
         const int lid =
                 id_dec != nullptr && !m_cfg.layerField.empty() ? static_cast<int>(id_dec->get(cellID, layer_idx)) : -1;
         const int sid =
                 id_dec != nullptr && !m_cfg.sectorField.empty() ? static_cast<int>(id_dec->get(cellID, sector_idx)) : -1;
+
+        // determine sampling fraction
+        float sampFrac = m_cfg.sampFrac;
+        if (! m_cfg.sampFracLayer.empty()) {
+            if (0 <= lid && lid < m_cfg.sampFracLayer.size()) {
+                sampFrac = m_cfg.sampFracLayer[lid];
+            } else {
+                throw std::runtime_error(fmt::format("CalorimeterHitReco: layer-specific sampling fraction undefined for index {}", lid));
+            }
+        }
+
+        // convert ADC to energy
+        float energy = (((signed) rh.getAmplitude() - (signed) m_cfg.pedMeanADC)) / static_cast<float>(m_cfg.capADC) * m_cfg.dyRangeADC /
+                sampFrac;
+
+        const float time = rh.getTimeStamp() / stepTDC;
+        m_log->trace("cellID {}, \t energy: {},  TDC: {}, time: ", cellID, energy, rh.getTimeStamp(), time);
 
         dd4hep::Position gpos;
         try {

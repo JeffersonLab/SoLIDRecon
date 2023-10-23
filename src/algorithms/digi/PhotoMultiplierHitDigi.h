@@ -15,12 +15,13 @@
 
 #pragma once
 
-#include "services/geometry/dd4hep/JDD4hep_service.h"
 #include <TRandomGen.h>
 #include <edm4hep/SimTrackerHitCollection.h>
 #include <edm4eic/RawTrackerHitCollection.h>
 #include <edm4eic/MCRecoTrackerHitAssociationCollection.h>
 #include <spdlog/spdlog.h>
+#include <DD4hep/Detector.h>
+#include <DDRec/CellIDPositionConverter.h>
 #include <Evaluator/DD4hepUnits.h>
 #include <cstddef>
 #include <functional>
@@ -40,7 +41,7 @@ class PhotoMultiplierHitDigi : public WithPodConfig<PhotoMultiplierHitDigiConfig
 public:
     PhotoMultiplierHitDigi() = default;
     ~PhotoMultiplierHitDigi(){}
-    void AlgorithmInit(dd4hep::Detector *detector, std::shared_ptr<spdlog::logger>& logger);
+    void AlgorithmInit(const dd4hep::Detector* detector, const dd4hep::rec::CellIDPositionConverter* converter, std::shared_ptr<spdlog::logger>& logger);
     void AlgorithmChangeRun();
     PhotoMultiplierHitDigiResult AlgorithmProcess(
         const edm4hep::SimTrackerHitCollection* sim_hits
@@ -105,10 +106,10 @@ private:
         bool             is_noise_hit = false
         );
 
-    dd4hep::Detector *m_detector   = nullptr;
+    const dd4hep::Detector* m_detector = nullptr;
+    const dd4hep::rec::CellIDPositionConverter* m_converter;
 
     std::shared_ptr<spdlog::logger> m_log;
-    std::shared_ptr<const dd4hep::rec::CellIDPositionConverter> m_cellid_converter;
 
     // std::default_random_engine generator; // TODO: need something more appropriate here
     // std::normal_distribution<double> m_normDist; // defaults to mean=0, sigma=1

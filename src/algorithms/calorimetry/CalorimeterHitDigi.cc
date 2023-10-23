@@ -13,7 +13,6 @@
 
 #include "CalorimeterHitDigi.h"
 
-#include <JANA/JEvent.h>
 #include <Evaluator/DD4hepUnits.h>
 #include <fmt/format.h>
 using namespace dd4hep;
@@ -85,7 +84,7 @@ void CalorimeterHitDigi::init(const dd4hep::Detector* detector, std::shared_ptr<
             // throw::runtime_error(fmt::format("Failed to load ID decoder for {}", m_cfg.readout));
             return;
         }
-        m_log->info("ID mask in {:s}: {:#064b}", m_cfg.readout, id_mask);
+        m_log->debug("ID mask in {:s}: {:#064b}", m_cfg.readout, id_mask);
     }
     id_mask = ~id_inverse_mask;
 }

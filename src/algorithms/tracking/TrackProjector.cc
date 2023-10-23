@@ -11,6 +11,7 @@
 #include <Acts/EventData/MultiTrajectoryHelpers.hpp>
 
 // Event Model related classes
+#include <edm4eic/EDM4eicVersion.h>
 #include <edm4eic/TrackerHitCollection.h>
 #include <edm4eic/TrackParametersCollection.h>
 #include <edm4eic/TrajectoryCollection.h>
@@ -37,6 +38,10 @@
 
 #include <cmath>
 
+#if FMT_VERSION >= 90000
+template<> struct fmt::formatter<Acts::GeometryIdentifier> : fmt::ostream_formatter {};
+#endif // FMT_VERSION >= 90000
+
 namespace eicrecon {
 
     void
@@ -46,10 +51,10 @@ namespace eicrecon {
     }
 
 
-    std::vector<edm4eic::TrackSegment *> TrackProjector::execute(std::vector<const ActsExamples::Trajectories *> trajectories) {
+    std::unique_ptr<edm4eic::TrackSegmentCollection> TrackProjector::execute(std::vector<const ActsExamples::Trajectories *> trajectories) {
 
         // create output collections
-        std::vector<edm4eic::TrackSegment *> track_segments;
+        auto track_segments = std::make_unique<edm4eic::TrackSegmentCollection>();
         m_log->debug("Track projector event process. Num of input trajectories: {}", std::size(trajectories));
 
         // Loop over the trajectories
@@ -66,7 +71,7 @@ namespace eicrecon {
                 m_log->debug("  Empty multiTrajectory.");
                 continue;
             }
-            auto &trackTip = trackTips.front();
+            const auto &trackTip = trackTips.front();
 
             // Collect the trajectory summary info
             auto trajState = Acts::MultiTrajectoryHelpers::trajectoryState(mj, trackTip);
@@ -76,7 +81,7 @@ namespace eicrecon {
             m_log->debug("  Num measurement in trajectory {}", m_nMeasurements);
             m_log->debug("  Num state in trajectory {}", m_nStates);
 
-            edm4eic::MutableTrackSegment track_segment;
+            auto track_segment = track_segments->create();
 
             // visit the track points
             mj.visitBackwards(trackTip, [&](auto &&trackstate) {
@@ -143,8 +148,15 @@ namespace eicrecon {
                 const float pathLength = static_cast<float>(trackstate.pathLength());
                 const float pathLengthError = 0;
 
+                uint64_t surface = trackstate.referenceSurface().geometryId().value();
+                uint32_t system = 0;
+
                 // Store track point
                 track_segment.addToPoints({
+#if EDM4EIC_VERSION_MAJOR >= 3
+                                                  surface,
+                                                  system,
+#endif
                                                   position,
                                                   positionError,
                                                   momentum,
@@ -189,13 +201,10 @@ namespace eicrecon {
 
             m_log->debug("  Num calibrated state in trajectory {}", m_nCalibrated);
             m_log->debug("------ end of trajectory process ------");
-
-            // Add to output collection
-            track_segments.push_back(new edm4eic::TrackSegment(track_segment));
         }
 
         m_log->debug("END OF Track projector event process");
-        return track_segments;
+        return std::move(track_segments);
     }
 
 

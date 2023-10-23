@@ -83,6 +83,24 @@ endif()
 message(STATUS "${CMAKE_PROJECT_NAME}: PLUGIN_LIBRARY_OUTPUT_DIRECTORY: ${PLUGIN_LIBRARY_OUTPUT_DIRECTORY}")
 
 
+# Use, i.e. don't skip the full RPATH for the build tree,
+# and use relative paths for relocatable build products
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+
+# When building, don't use the install RPATH already
+# (but later on when installing)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+set(CMAKE_SKIP_INSTALL_RPATH FALSE)
+set(CMAKE_INSTALL_RPATH
+    "${CMAKE_INSTALL_PREFIX}/${PLUGIN_LIBRARY_OUTPUT_DIRECTORY};${CMAKE_INSTALL_PREFIX}/${PLUGIN_OUTPUT_DIRECTORY}"
+)
+
+# Add the automatically determined parts of the RPATH
+# which point to directories outside the build tree to the install RPATH
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+
 # Check and print what JANA2 is used
 find_package(JANA 2.0.8 REQUIRED)
 message(STATUS "${CMAKE_PROJECT_NAME}: JANA2 CMake   : ${JANA_DIR}")
@@ -95,8 +113,23 @@ add_compile_definitions(HAVE_PODIO)
 # PODIO, EDM4HEP, EDM4EIC event models
 find_package(Eigen3 REQUIRED)
 find_package(podio REQUIRED)
-find_package(EDM4HEP REQUIRED)
+find_package(EDM4HEP 0.7.1 REQUIRED)
 find_package(EDM4EIC 2.1 REQUIRED)
+
+# Guidelines Support Library
+find_package(Microsoft.GSL CONFIG)
+
+# Remove PODIO_JSON_OUTPUT (ref: https://github.com/AIDASoft/podio/issues/475)
+get_target_property(EDM4HEP_INTERFACE_COMPILE_DEFINITIONS EDM4HEP::edm4hep INTERFACE_COMPILE_DEFINITIONS)
+if(EDM4HEP_INTERFACE_COMPILE_DEFINITIONS)
+  list(FILTER EDM4HEP_INTERFACE_COMPILE_DEFINITIONS EXCLUDE REGEX [[^PODIO_JSON_OUTPUT$]])
+  set_property(TARGET EDM4HEP::edm4hep PROPERTY INTERFACE_COMPILE_DEFINITIONS ${EDM4HEP_INTERFACE_COMPILE_DEFINITIONS})
+endif()
+get_target_property(EDM4EIC_INTERFACE_COMPILE_DEFINITIONS EDM4EIC::edm4eic INTERFACE_COMPILE_DEFINITIONS)
+if(EDM4EIC_INTERFACE_COMPILE_DEFINITIONS)
+  list(FILTER EDM4EIC_INTERFACE_COMPILE_DEFINITIONS EXCLUDE REGEX [[^PODIO_JSON_OUTPUT$]])
+  set_property(TARGET EDM4EIC::edm4eic PROPERTY INTERFACE_COMPILE_DEFINITIONS ${EDM4EIC_INTERFACE_COMPILE_DEFINITIONS})
+endif()
 
 # DD4Hep is required for the most of the part
 find_package(DD4hep REQUIRED)
@@ -141,13 +174,14 @@ endif()
 # Undefined behavior sanitizer
 option(USE_UBSAN "Compile with undefined behavior sanitizer" OFF)
 if (${USE_UBSAN})
-    foreach (sanitizer undefined nullability implicit-conversion)
+    foreach (sanitizer undefined float-divide-by-zero unsigned-integer-overflow implicit-conversion local-bounds nullability)
         check_cxx_compiler_flag("-fsanitize=${sanitizer}" CXX_COMPILER_HAS_sanitize_${sanitizer})
         if (CXX_COMPILER_HAS_sanitize_${sanitizer})
-            add_compile_options(-fsanitize=${sanitizer} -g -O1)
+            add_compile_options(-fsanitize=${sanitizer})
             add_link_options(-fsanitize=${sanitizer})
         endif()
     endforeach()
+    add_compile_options(-g -O1)
 endif()
 
 # Compress debug symbols if supported

@@ -36,6 +36,10 @@ JEventProcessorPODIO::JEventProcessorPODIO() {
 
     // Get the list of output collections to include/exclude
     std::vector<std::string> output_include_collections={
+            // Header and other metadata
+            "EventHeader",
+
+            // Truth record
             "MCParticles",
 
             // All tracking hits combined
@@ -66,6 +70,9 @@ JEventProcessorPODIO::JEventProcessorPODIO() {
             "BackwardMPGDEndcapRecHits",
             "ForwardMPGDEndcapRecHits",
 
+            // LOWQ2 hits
+            "TaggerTrackerRawHits",
+
             // Forward & Far forward hits
             "B0TrackerRecHits",
 
@@ -95,8 +102,13 @@ JEventProcessorPODIO::JEventProcessorPODIO() {
             "InclusiveKinematicsElectron",
             "InclusiveKinematicsTruth",
             "GeneratedJets",
+            "GeneratedChargedJets",
             "ReconstructedJets",
+            "ReconstructedChargedJets",
             "ReconstructedElectrons",
+
+            // Track projections
+            "CalorimeterTrackProjections",
 
             // Ecal stuff
             "EcalEndcapNRawHits",
@@ -140,13 +152,6 @@ JEventProcessorPODIO::JEventProcessorPODIO() {
             "HcalEndcapNMergedHits",
             "HcalEndcapNClusters",
             "HcalEndcapNClusterAssociations",
-            "HcalEndcapPRawHits",   // this causes premature exit of eicrecon
-            "HcalEndcapPRecHits",
-            "HcalEndcapPMergedHits",
-            "HcalEndcapPTruthClusters",
-            "HcalEndcapPTruthClusterAssociations",
-            "HcalEndcapPClusters",
-            "HcalEndcapPClusterAssociations",
             "HcalEndcapPInsertRawHits",
             "HcalEndcapPInsertRecHits",
             "HcalEndcapPInsertMergedHits",
@@ -208,7 +213,7 @@ JEventProcessorPODIO::JEventProcessorPODIO() {
 
 void JEventProcessorPODIO::Init() {
 
-    auto app = GetApplication();
+    auto *app = GetApplication();
     m_log = app->GetService<Log_service>()->logger("JEventProcessorPODIO");
     m_log->set_level(spdlog::level::debug);
     m_writer = std::make_unique<podio::ROOTFrameWriter>(m_output_file);
@@ -271,6 +276,7 @@ void JEventProcessorPODIO::Process(const std::shared_ptr<const JEvent> &event) {
     //            all). See also below, at "TODO: NWB:".
     for (const auto& coll_name : m_collections_to_write) {
         try {
+            [[maybe_unused]]
             const auto* coll_ptr = event->GetCollectionBase(coll_name);
         }
         catch(std::exception &e) {
@@ -356,7 +362,7 @@ void JEventProcessorPODIO::Process(const std::shared_ptr<const JEvent> &event) {
     // Frame will contain data from all Podio factories that have been triggered,
     // including by the `event->GetCollectionBase(coll);` above.
     // Note that collections MUST be present in frame. If a collection is null, the writer will segfault.
-    auto* frame = event->GetSingle<podio::Frame>();
+    const auto* frame = event->GetSingle<podio::Frame>();
 
     // TODO: NWB: We need to actively stabilize podio collections. Until then, keep this around in case
     //            the writer starts segfaulting, so we can quickly see whether the problem is unstable collection IDs.
