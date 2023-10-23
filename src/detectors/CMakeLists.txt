@@ -24,4 +24,7 @@ add_subdirectory(LUMISPECCAL)  # Lumi spectrometer calorimeter
 add_subdirectory(DRICH)
 add_subdirectory(DIRC)
 
-add_subdirectory(SoLID)
+# SoLID detectors
+add_subdirectory(SoLID/FAEMCal)
+add_subdirectory(SoLID/LAEMCal)
+
